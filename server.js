@@ -21,16 +21,27 @@ app.post('/api/fetch-data', async (req, res) => {
     }
 
     try {
-        // Menggunakan API solver publik Platoboost/BypassVIP
-        const response = await axios.get(`https://api.bypass.vip/bypass`, {
+        // Menggunakan endpoint solver alternatif (misal: Lootlabs/Platoboost Solver)
+        // Catatan: Jika API ini meminta API Key, tambahkan di parameter/header
+        const response = await axios.get(`https://api.bypass.city/bypass`, {
             params: { url: url },
-            timeout: 25000 // Timeout 25 detik
+            timeout: 20000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            }
         });
 
         console.log('Response Solver API:', response.data);
 
-        // Menangkap hasil respon
         const resultKey = response.data?.result || response.data?.key || response.data?.destination || response.data?.url;
+
+        // Cek apakah balasan API berisi pesan shutdown/iklan
+        if (typeof resultKey === 'string' && (resultKey.includes('SHUT DOWN') || resultKey.includes('FREE API'))) {
+            return res.status(503).json({
+                success: false,
+                message: 'API Solver publik saat ini sedang di-deaktifkan oleh penyedia jasa. Gunakan API key atau endpoint solver pribadi.'
+            });
+        }
 
         if (resultKey) {
             return res.json({ 
@@ -40,32 +51,14 @@ app.post('/api/fetch-data', async (req, res) => {
         } else {
             return res.status(422).json({ 
                 success: false, 
-                message: response.data?.message || 'Gagal me-resolve link. Pastikan link Platoboost/Relay valid.' 
+                message: response.data?.message || 'Gagal me-resolve link. Format respon dari solver tidak dikenali.' 
             });
         }
     } catch (error) {
         console.error('Error saat request ke API Solver:', error.message);
-        
-        // Fallback jika API utama RTO/offline, mencoba endpoint alternatif
-        try {
-            const fallbackResponse = await axios.get(`https://ethon.ai/api/bypass`, {
-                params: { url: url },
-                timeout: 15000
-            });
-
-            if (fallbackResponse.data && (fallbackResponse.data.result || fallbackResponse.data.key)) {
-                return res.json({
-                    success: true,
-                    result: fallbackResponse.data.result || fallbackResponse.data.key
-                });
-            }
-        } catch (fallbackError) {
-            console.error('Fallback error:', fallbackError.message);
-        }
-
         return res.status(500).json({ 
             success: false, 
-            message: 'Server solver sedang sibuk atau offline. Coba beberapa saat lagi.' 
+            message: 'Server solver publik sedang offline atau memblokir request. Silakan ganti ke endpoint API solver yang valid.' 
         });
     }
 });
