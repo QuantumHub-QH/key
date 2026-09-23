@@ -20,29 +20,17 @@ app.post('/api/fetch-data', async (req, res) => {
         });
     }
 
-    // MASUKKAN ENDPOINT API SOLVER ASLI KAMU DI BAWAH INI
-    // Kamu bisa mengaturnya via Environment Variable di Railway (SOLVER_API_URL) atau langsung tulis di kodenya
-    const solverApiUrl = process.env.SOLVER_API_URL || 'https://api.bypass-service.com/v1/solve';
-
-    // Peringatan jika masih menggunakan URL contoh/placeholder
-    if (solverApiUrl.includes('api.bypass-service.com')) {
-        return res.status(400).json({
-            success: false,
-            message: 'URL API Solver belum diisi! Silakan ganti "solverApiUrl" di server.js dengan endpoint API solver asli kamu.'
-        });
-    }
-
     try {
-        // Mengirim request ke API solver
-        const response = await axios.get(solverApiUrl, {
-            params: { url: url }, // Sesuaikan query param (misal: 'url', 'link', atau 'target')
-            timeout: 20000
+        // Menggunakan API solver publik Platoboost/BypassVIP
+        const response = await axios.get(`https://api.bypass.vip/bypass`, {
+            params: { url: url },
+            timeout: 25000 // Timeout 25 detik
         });
 
-        console.log('Response dari Solver API:', response.data);
+        console.log('Response Solver API:', response.data);
 
-        // Menangkap hasil respon (menyesuaikan format JSON dari solver)
-        const resultKey = response.data?.result || response.data?.key || response.data?.bypassed_url || response.data?.url;
+        // Menangkap hasil respon
+        const resultKey = response.data?.result || response.data?.key || response.data?.destination || response.data?.url;
 
         if (resultKey) {
             return res.json({ 
@@ -52,14 +40,32 @@ app.post('/api/fetch-data', async (req, res) => {
         } else {
             return res.status(422).json({ 
                 success: false, 
-                message: 'API Solver tidak mengembalikan struktur key/result yang valid.' 
+                message: response.data?.message || 'Gagal me-resolve link. Pastikan link Platoboost/Relay valid.' 
             });
         }
     } catch (error) {
         console.error('Error saat request ke API Solver:', error.message);
+        
+        // Fallback jika API utama RTO/offline, mencoba endpoint alternatif
+        try {
+            const fallbackResponse = await axios.get(`https://ethon.ai/api/bypass`, {
+                params: { url: url },
+                timeout: 15000
+            });
+
+            if (fallbackResponse.data && (fallbackResponse.data.result || fallbackResponse.data.key)) {
+                return res.json({
+                    success: true,
+                    result: fallbackResponse.data.result || fallbackResponse.data.key
+                });
+            }
+        } catch (fallbackError) {
+            console.error('Fallback error:', fallbackError.message);
+        }
+
         return res.status(500).json({ 
             success: false, 
-            message: `Gagal terhubung ke API Solver: ${error.message}` 
+            message: 'Server solver sedang sibuk atau offline. Coba beberapa saat lagi.' 
         });
     }
 });
