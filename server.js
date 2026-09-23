@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Endpoint POST yang terhubung ke API Solver
+// Endpoint API untuk memproses link
 app.post('/api/fetch-data', async (req, res) => {
     const { url } = req.body;
 
@@ -20,18 +20,31 @@ app.post('/api/fetch-data', async (req, res) => {
         });
     }
 
+    // MASUKKAN ENDPOINT API SOLVER ASLI KAMU DI BAWAH INI
+    // Kamu bisa mengaturnya via Environment Variable di Railway (SOLVER_API_URL) atau langsung tulis di kodenya
+    const solverApiUrl = process.env.SOLVER_API_URL || 'https://api.bypass-service.com/v1/solve';
+
+    // Peringatan jika masih menggunakan URL contoh/placeholder
+    if (solverApiUrl.includes('api.bypass-service.com')) {
+        return res.status(400).json({
+            success: false,
+            message: 'URL API Solver belum diisi! Silakan ganti "solverApiUrl" di server.js dengan endpoint API solver asli kamu.'
+        });
+    }
+
     try {
-        // Ganti URL API solver eksternal di bawah sesuai kebutuhan
-        const solverApiUrl = process.env.SOLVER_API_URL || 'https://api.bypass-service.com/v1/solve';
-        
+        // Mengirim request ke API solver
         const response = await axios.get(solverApiUrl, {
-            params: { url: url },
-            timeout: 15000
+            params: { url: url }, // Sesuaikan query param (misal: 'url', 'link', atau 'target')
+            timeout: 20000
         });
 
-        // Tangkap hasil key/result dari API solver
-        if (response.data && (response.data.result || response.data.key)) {
-            const resultKey = response.data.result || response.data.key;
+        console.log('Response dari Solver API:', response.data);
+
+        // Menangkap hasil respon (menyesuaikan format JSON dari solver)
+        const resultKey = response.data?.result || response.data?.key || response.data?.bypassed_url || response.data?.url;
+
+        if (resultKey) {
             return res.json({ 
                 success: true, 
                 result: resultKey 
@@ -39,19 +52,19 @@ app.post('/api/fetch-data', async (req, res) => {
         } else {
             return res.status(422).json({ 
                 success: false, 
-                message: 'Gagal memproses link. Link tidak valid atau tidak didukung.' 
+                message: 'API Solver tidak mengembalikan struktur key/result yang valid.' 
             });
         }
     } catch (error) {
-        console.error('Error saat request API:', error.message);
+        console.error('Error saat request ke API Solver:', error.message);
         return res.status(500).json({ 
             success: false, 
-            message: 'Terjadi kesalahan pada server solver atau koneksi RTO.' 
+            message: `Gagal terhubung ke API Solver: ${error.message}` 
         });
     }
 });
 
-// Tampilan Frontend Inline (Tailwind CSS UI)
+// Tampilan Frontend UI (Tailwind CSS Inline)
 app.get('*', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -73,7 +86,7 @@ app.get('*', (req, res) => {
                 <input 
                     type="url" 
                     id="targetUrl" 
-                    placeholder="https://..." 
+                    placeholder="https://auth.platorelay.com/..." 
                     required 
                     class="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-white"
                 >
@@ -89,7 +102,7 @@ app.get('*', (req, res) => {
         </form>
 
         <div id="resultBox" class="mt-6 hidden">
-            <label class="block text-sm font-medium text-gray-300 mb-1">Hasil Target Link / Key:</label>
+            <label class="block text-sm font-medium text-gray-300 mb-1">Hasil Key / Link Akhir:</label>
             <div class="flex items-center bg-gray-900 border border-gray-700 rounded-lg p-2.5">
                 <input type="text" id="resultInput" readonly class="bg-transparent w-full text-xs text-green-400 font-mono focus:outline-none">
                 <button id="copyBtn" onclick="copyResult()" class="ml-2 bg-gray-800 hover:bg-gray-700 text-xs px-3 py-1.5 rounded border border-gray-600 text-gray-200">
