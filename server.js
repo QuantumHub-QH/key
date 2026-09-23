@@ -20,46 +20,58 @@ app.post('/api/fetch-data', async (req, res) => {
         });
     }
 
+    // List Endpoint API Solver (Sistem Cadangan Bertingkat)
+    const primaryApi = `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`;
+    const fallbackApi = `https://dl.vnn.dev/api/bypass?url=${encodeURIComponent(url)}`;
+
     try {
-        // Menggunakan endpoint solver alternatif (misal: Lootlabs/Platoboost Solver)
-        // Catatan: Jika API ini meminta API Key, tambahkan di parameter/header
-        const response = await axios.get(`https://api.bypass.city/bypass`, {
-            params: { url: url },
-            timeout: 20000,
+        // Percobaan 1: Menggunakan API Utama
+        console.log('Mencoba memproses via API Utama...');
+        const response = await axios.get(primaryApi, {
+            timeout: 15000,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
 
-        console.log('Response Solver API:', response.data);
+        const resultKey = response.data?.result || response.data?.key || response.data?.url || response.data?.destination;
 
-        const resultKey = response.data?.result || response.data?.key || response.data?.destination || response.data?.url;
-
-        // Cek apakah balasan API berisi pesan shutdown/iklan
-        if (typeof resultKey === 'string' && (resultKey.includes('SHUT DOWN') || resultKey.includes('FREE API'))) {
-            return res.status(503).json({
-                success: false,
-                message: 'API Solver publik saat ini sedang di-deaktifkan oleh penyedia jasa. Gunakan API key atau endpoint solver pribadi.'
-            });
+        // Cek jika respon valid dan bukan pesan error/shutdown
+        if (resultKey && typeof resultKey === 'string' && !resultKey.includes('SHUT DOWN')) {
+            return res.json({ success: true, result: resultKey });
         }
+        
+        throw new Error('API Utama mengembalikan respon tidak valid.');
 
-        if (resultKey) {
-            return res.json({ 
-                success: true, 
-                result: resultKey 
+    } catch (primaryError) {
+        console.warn('API Utama gagal/offline, beralih ke API Cadangan...', primaryError.message);
+
+        try {
+            // Percobaan 2: Menggunakan API Cadangan (Fallback)
+            const fallbackRes = await axios.get(fallbackApi, {
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
             });
-        } else {
-            return res.status(422).json({ 
+
+            const fallbackKey = fallbackRes.data?.result || fallbackRes.data?.key || fallbackRes.data?.url || fallbackRes.data?.data;
+
+            if (fallbackKey) {
+                return res.json({ success: true, result: fallbackKey });
+            } else {
+                return res.status(422).json({ 
+                    success: false, 
+                    message: 'Gagal me-resolve link. Kedua API solver publik sedang tidak merespon.' 
+                });
+            }
+        } catch (fallbackError) {
+            console.error('API Cadangan juga gagal:', fallbackError.message);
+            return res.status(500).json({ 
                 success: false, 
-                message: response.data?.message || 'Gagal me-resolve link. Format respon dari solver tidak dikenali.' 
+                message: 'Semua API solver publik sedang offline/ip-blocked. Gunakan API Solver pribadi atau coba beberapa saat lagi.' 
             });
         }
-    } catch (error) {
-        console.error('Error saat request ke API Solver:', error.message);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Server solver publik sedang offline atau memblokir request. Silakan ganti ke endpoint API solver yang valid.' 
-        });
     }
 });
 
